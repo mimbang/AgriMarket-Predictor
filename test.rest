@@ -1,0 +1,9 @@
+POST http://127.0.0.1:8000/predict
+Content-Type: application/json
+
+{
+    
+  "produit": "tomate",
+  "date_voulue": "2026-12-27"
+
+}

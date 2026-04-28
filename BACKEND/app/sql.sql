@@ -1,0 +1,9 @@
+-- Colonne,Type,Rôle
+-- id,UUID/INT,Identifiant unique de la transaction.
+-- created_at,TIMESTAMP,Moment exact de la demande (pour l'audit).
+-- date_voulue,DATE,La date pour laquelle on a prédit le prix.
+-- produit,VARCHAR,Tomate ou Oignon.
+-- input_features,JSONB,"On stocke tout le bloc (carburant, dispo, impact) pour pouvoir ""rejouer"" le match."
+-- prix_predit,FLOAT,Ce que l'IA a dit.
+-- prix_reel,FLOAT,Ce que le Scraper a trouvé (mis à jour a posteriori).
+-- model_version,VARCHAR,Ex: v2.1_rf_oignon.
