@@ -29,7 +29,11 @@ services:
     env_file:
       - .env
     volumes:
-      - ./brain:/app/brain  # Pour que l'API accède aux modèles .pkl
+# ICI : On lie le dossier local BACKEND/app au dossier /app/app du conteneur
+      - ./BACKEND/app:/app/app
+      - ./BACKEND/brain:/app/brain
+      - ./BACKEND/scripts:/app/scripts
+
 
 volumes:
   postgres_data:

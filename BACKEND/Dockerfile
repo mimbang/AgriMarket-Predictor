@@ -1,23 +1,17 @@
-FROM python:3.9-slim
+FROM python:3.11-bookworm
 
-# Installation des dépendances système pour PostgreSQL
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
 WORKDIR /app
 
-# On copie les dépendances
-COPY requirements.txt .
-RUN pip install --no-cache-dir --default-timeout=1000 -r requirements.txt || \
-    pip install --no-cache-dir --default-timeout=1000 -r requirements.txt
+# On installe le minimum vital
+RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
 
-# On copie tout le contenu du dossier backend dans /app
+COPY requirements.txt .
+# On met le paquet de timeout ici aussi par sécurité
+RUN pip install --no-cache-dir --default-timeout=1000 --prefer-binary -r requirements.txt
+
 COPY . .
 
-# On expose le port
-EXPOSE 8000
-
-# Commande de lancement (SANS LE # DEVANT)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000","--reload"]
