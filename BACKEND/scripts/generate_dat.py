@@ -1,50 +1,43 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import joblib
 import os
 
-def generate_complex_data():
+def generate_data():
+    print("🚜 Génération du dataset Agri-Cameroun...")
     np.random.seed(42)
-    n = 5000  # On augmente pour plus de précision
+    n_per_product = 2500
     
-    # 1. Variables de base
-    months = np.random.randint(1, 13, n)
-    carburant = np.random.uniform(600, 950, n)  # Prix à la pompe
-    dispo = np.random.uniform(0.05, 1.0, n)     # 0.05 = pénurie totale
-    
-    # 2. Nouveaux Indices (0 à 1)
-    # Indice Politique : 0 (conflit/routes barrées) à 1 (stabilité totale)
-    indice_pol = np.random.uniform(0, 1, n)
-    
-    # Indice Economique : 0 (forte inflation/crise) à 1 (croissance stable)
-    indice_econ = np.random.uniform(0, 1, n)
+    products_config = {
+        "Oignon": {"base": 25000, "sens": 1.5, "soudure": [3, 4, 5, 6]},
+        "Tomate": {"base": 5000, "sens": 2.5, "soudure": [7, 8, 9]},
+        "Maïs":   {"base": 18000, "sens": 1.2, "soudure": [4, 5, 6]},
+        "Pomme de terre": {"base": 22000, "sens": 1.4, "soudure": [5, 6, 7]}
+    }
 
-    # 3. Logique Métier "Cameroun"
-    # Le prix de base est dicté par le carburant
-    prix_base = carburant * 0.6
-    
-    # Impact de la disponibilité (exponentiel : quand c'est rare, ça explose)
-    impact_rarete = (1 / (dispo + 0.1)) * 45
-    
-    # Impact Saisonnalité (Soudure entre Mars et Juin : les stocks sont vides)
-    impact_saison = np.where((months >= 3) & (months <= 6), 1.45, 1.0)
-    
-    # Impact Politique & Economique
-    # Si pol est bas (0.2), le prix augmente car l'approvisionnement est risqué
-    impact_externe = (1.5 - (indice_pol * 0.3)) * (1.3 - (indice_econ * 0.2))
-    
-    # Calcul du prix final avec un bruit aléatoire réaliste
-    prix_reel = (prix_base + impact_rarete) * impact_saison * impact_externe
-    prix_reel += np.random.normal(0, 25, n)
+    all_rows = []
+    for prod, conf in products_config.items():
+        months = np.random.randint(1, 13, n_per_product)
+        carburant = np.random.uniform(600, 950, n_per_product)
+        dispo = np.random.uniform(0.1, 1.0, n_per_product)
+        pol = np.random.uniform(0.4, 1.0, n_per_product)
+        econ = np.random.uniform(0.4, 1.0, n_per_product)
 
-    return pd.DataFrame({
-        'mois': months,
-        'carburant': carburant,
-        'dispo': dispo,
-        'indice_pol': indice_pol,
-        'indice_econ': indice_econ,
-        'prix': prix_reel
-    })
+        # Logique de prix
+        price = conf["base"] + (carburant * 5)
+        price += (1 / dispo) * (500 * conf["sens"])
+        price *= np.where(np.isin(months, conf["soudure"]), 1.4, 1.0)
+        price *= (1.3 - (pol * 0.3))
+        price += np.random.normal(0, conf["base"] * 0.05, n_per_product)
+
+        for i in range(n_per_product):
+            all_rows.append([prod, months[i], carburant[i], dispo[i], pol[i], econ[i], round(price[i], 2)])
+
+    df = pd.DataFrame(all_rows, columns=['produit', 'mois', 'carburant', 'dispo', 'pol', 'econ', 'prix'])
+    
+    os.makedirs('Persitent_storage', exist_ok=True)
+    df.to_csv('Persitent_storage/data.csv', index=False)
+    print(f"💾 Dataset sauvegardé : {len(df)} lignes dans Persitent_storage/data.csv")
+    return df
+
+if __name__ == "__main__":
+    generate_data()
