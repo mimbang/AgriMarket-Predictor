@@ -32,39 +32,130 @@ from typing import Optional
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
+from pydantic import BaseModel, Field, validator
+from typing import Optional
+
 class PredictionInput(BaseModel):
-    # 1. Le Produit (avec une liste de choix pour éviter les erreurs de frappe)
-    produit: str = Field(..., description="Nom du produit (Tomate, Oignon, Maïs, Pomme de terre)")
+    # L'utilisateur choisit uniquement le produit et l'échéance
+    produit: str = Field(..., description="Le nom du produit agricole")
+    date_prediction: Optional[date] = Field(
+        None,
+        description="Date de la prédiction"
+    )
+    predire_dans_x_mois: int = Field(
+        default=0, 
+        ge=0, 
+        le=12, 
+        description="Nombre de mois dans le futur (0 pour ce mois-ci)"
+    )
     
-    # 2. Les Facteurs de Marché (avec limites strictes)
-    carburant: float = Field(..., gt=0, le=2000, description="Prix du litre de carburant en FCFA")
-    disponibilite: float = Field(..., ge=0.1, le=1.0, description="Niveau de stock (0.1: Pénurie, 1.0: Abondance)")
-    
-    # 3. Les Indices Macro (Valeurs par défaut à 0.5 pour un état 'moyen')
-    indice_politique: float = Field(0.5, ge=0, le=1, description="Stabilité (0: Crise/Routes barrées, 1: Calme)")
-    indice_economique: float = Field(0.5, ge=0, le=1, description="Santé éco (0: Forte inflation, 1: Stabilité)")
-    
-    # 4. La Gestion du Temps (Flexible)
-    date_prediction: Optional[date] = None
-    predire_dans_x_mois: Optional[int] = Field(None, ge=0, description="Nombre de mois à ajouter à aujourd'hui")
+    # Optionnel : une ville si tu veux affiner plus tard
+    ville: Optional[str] = Field("Yaoundé", description="Ville de référence")
 
     @validator('produit')
-    def check_product_exists(cls, v):
-        # On s'assure que le produit est bien capitalisé comme dans le trainer
+    def validate_produit(cls, v):
+        # On normalise pour correspondre aux noms dans ton modèle IA
         v = v.capitalize()
-        allowed = ["Tomate", "Oignon", "Maïs", "Pomme de terre"]
-        if v not in allowed:
-            raise ValueError(f"Produit non supporté. Choisissez parmi : {allowed}")
+        produits_autorises = ["Tomate", "Oignon", "Maïs", "Pomme de terre"]
+        if v not in produits_autorises:
+            raise ValueError(f"Produit non géré. Liste autorisée : {produits_autorises}")
         return v
-
+    
+    @validator('dateprediction', always=True)
+    def validate_date_prediction(cls, v, values):
+        if v is None:
+            # Si l'utilisateur n'a pas fourni de date, on calcule à partir de 'predire_dans_x_mois'
+            mois_a_ajouter = values.get('predire_dans_x_mois', 0)
+            return (datetime.today() + relativedelta(months=mois_a_ajouter)).date()
+        return v
+    
     class Config:
         json_schema_extra = {
             "example": {
                 "produit": "Tomate",
-                "carburant": 840.0,
-                "disponibilite": 0.4,
-                "indice_politique": 0.7,
-                "indice_economique": 0.5,
-                "predire_dans_x_mois": 6
+                "predire_dans_x_mois": 2,
+                "ville": "Yaoundé"
             }
         }
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, JSON
+from sqlalchemy.dialects.postgresql import UUID
+import uuid
+from datetime import datetime
+from .database import Base
+
+
+import uuid
+from datetime import datetime
+from sqlalchemy import Column, String, Float, DateTime, Date, Integer, JSON, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from .database import Base
+
+class Product(Base):
+    """
+    TABLE : products
+    ROLE  : Référentiel des produits supportés par l'IA.
+    DOC   : Garantit que le front-end demande un produit existant et connu.
+    """
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String, unique=True, nullable=False) # Ex: "Tomate"
+    categorie = Column(String)                        # Ex: "Légume"
+    unite = Column(String, default="kg")              # Ex: "Kg" ou "Sac"
+
+class MarketIndex(Base):
+    """
+    TABLE : market_indices
+    ROLE  : Bibliothèque des variables économiques (Carburant, Stabilité).
+    DOC   : Le Back-end consulte cette table pour nourrir l'IA automatiquement 
+            sans que le Front n'ait à envoyer ces chiffres complexes.
+    """
+    __tablename__ = "market_indices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mois = Column(Integer, nullable=False)           # 1 à 12
+    annee = Column(Integer, nullable=False)          # Ex: 2026
+    prix_carburant = Column(Float, nullable=False)   # Prix du litre
+    indice_politique = Column(Float, default=0.5)    # Score 0 à 1
+    indice_economique = Column(Float, default=0.5)   # Score 0 à 1
+
+class PredictionLog(Base):
+    """
+    TABLE : prediction_logs
+    ROLE  : Journal de bord et Historique des prédictions.
+    DOC   : Stocke chaque calcul effectué. L'UUID sécurise l'accès. 
+            La colonne 'prix_reel' est mise à jour plus tard par le scraper.
+    """
+    __tablename__ = "prediction_logs"
+
+    # UUID : Identifiant unique complexe (ex: 550e8400-e29b...)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Informations de la demande
+    produit = Column(String, nullable=False)
+    date_voulue = Column(Date, nullable=False)
+    
+    # Paramètres utilisés par l'IA (stockés en JSON pour audit)
+    # Exemple : {"carburant": 850, "indice_pol": 0.5}
+    input_features = Column(JSON) 
+    
+    # Résultats
+    prix_predit = Column(Float, nullable=False)
+    prix_reel = Column(Float, nullable=True) # Rempli a posteriori par le scraper
+    model_version = Column(String, default="v1.0_rf")
+
+class ScrapedPrice(Base):
+    """
+    TABLE : scraped_prices
+    ROLE  : Mémoire des relevés réels sur le terrain.
+     Contient les prix trouvés par ton scraper. 
+            Sert à remplir 'prix_reel' dans 'prediction_logs'.
+    """
+    __tablename__ = "scraped_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date_releve = Column(Date, nullable=False)
+    produit = Column(String, nullable=False)
+    prix_constate = Column(Float, nullable=False)
+    source = Column(String) # Nom du marché ou site web        

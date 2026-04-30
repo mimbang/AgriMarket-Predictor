@@ -1,0 +1,2 @@
+# Exécute le pipeline à 2h du matin tous les jours
+0 2 * * * /usr/local/bin/python /app/worker.py >> /var/log/cron.log 2>&1

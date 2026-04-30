@@ -4,12 +4,17 @@ from fastapi import FastAPI, Depends
 import joblib , os ,numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
-from .database import engine, Base, get_db
+from .database import SessionLocal, engine, Base, get_db, seed_database
 import time
-from .models import PredictionInput
+from .models import PredictionInput, PredictionLog , MarketIndex 
 from datetime import date
 from contextlib import asynccontextmanager
 import pandas as pd
+from app.database import SessionLocal
+
+from scripts.scraper import update_market_indices_via_finance
+from scripts.reality_simulator import simulate_market_reality
+from scripts.match import sync_real_prices
 
 # app = FastAPI(title="AgriMarket API")
 load_dotenv()
@@ -43,6 +48,9 @@ async def lifespan(app: FastAPI):
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         print(" [DB] Base de données connectée et prête.")
+        # Chargement des données JSON (Seeding)
+        with SessionLocal() as db:
+         seed_database(db)
     except Exception as e:
         print(f" [DB] Erreur : Impossible de joindre la base de données.")
         print(f"👉 Détail : {e}")
@@ -94,10 +102,11 @@ def test_db(db: Session = Depends(get_db)):
     return {"status": "Connexion DB opérationnelle"}
 
 @app.post("/predict")
-async def predict(payload: PredictionInput):
+async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
     # Plus besoin de vérifier "if model is None", lifespan s'en est chargé !
     
     try:
+        target_date = payload.da or date.today()
         # 1. Encodage sécurisé du produit
         try:
             prod_name = payload.produit.capitalize()
@@ -105,34 +114,58 @@ async def predict(payload: PredictionInput):
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Produit '{payload.produit}' inconnu.")
 
-        # 2. Préparation des données
-        target_date = payload.date_prediction or date.today()
-        
-        features = np.array([[
-            prod_encoded, 
-            target_date.month, 
-            payload.carburant, 
-            payload.disponibilite, 
-            payload.indice_politique, 
-            payload.indice_economique
-        ]])
-        # Remplace la création du np.array par un DataFrame avec les bons noms
-        features_df = pd.DataFrame([{
-                 "produit": prod_encoded,
-                     "mois": target_date.month,
-                     "carburant": payload.carburant,
-                    "disponibilite": payload.disponibilite,
-                    "indice_politique": payload.indice_politique,
-            "indice_economique": payload.indice_economique
-        }])
+        context = {
+            "carburant": 840.0, 
+            "disponibilite": 1,
+            "indice_politique": 0.5,
+            "indice_economique": 0.8
+        }
+        # 2. On récupère les indices DEPUIS LA DB (ceux que le scraper a rempli)
+        indices = db.query(MarketIndex).filter(
+        MarketIndex.mois == target_date.month,
+        MarketIndex.annee == target_date.year).first()
+        # 3. Préparation des données
+        # Sécurité : Si le scraper n'a pas encore rempli le mois futur, on prend le dernier connu
+        if not indices:
+          indices = db.query(MarketIndex).order_by(MarketIndex.annee.desc(), MarketIndex.mois.desc()).first()
 
-            # L'inférence se fait maintenant sans Warning
-        features_scaled = brain["scaler"].transform(features_df)
+    # 3. On prépare le dictionnaire pour le modèle ET pour le log
+        # On définit des constantes par défaut au cas où la DB est vide
+        DEFAULT_FUEL = 840.0
+        DEFAULT_INDEX = 0.5
+
+        input_data = {
+                "carburant": indices.prix_carburant if indices else DEFAULT_FUEL,
+                "disponibilite": 1, 
+                "indice_politique": indices.indice_politique if indices else DEFAULT_INDEX,
+                "indice_economique": indices.indice_economique if indices else DEFAULT_INDEX
+                        }
+
+    # 4. Conversion pour le modèle IA
+        prod_encoded = brain["encoder"].transform([payload.produit])[0]
+    
+    # Création du DataFrame avec les noms exacts des colonnes pour le modèle
+        X = pd.DataFrame([{
+        "produit": prod_encoded,
+        "mois": target_date.month,
+        **input_data
+    }])
+
+    # 5. Inférence
+        X_scaled = brain["scaler"].transform(X)
+        prediction = brain["model"].predict(X_scaled)[0]
+
+    # 6. ARCHIVAGE (C'est ici qu'on stocke ce qu'on a utilisé)
+        log = PredictionLog(
+        produit=payload.produit,
+        date_voulue=target_date,
+        prix_predit=prediction,
+        input_features=input_data  # On garde une trace du prix du carburant utilisé !
+    )
+        db.add(log)
+        db.commit()
         
         
-        # 3. Inférence
-        # features_scaled = brain["scaler"].transform(features)
-        prediction = brain["model"].predict(features_scaled)[0]
 
         print(f" [PREDICT] {prod_name}: {round(prediction, 2)} FCFA")
 
@@ -147,5 +180,103 @@ async def predict(payload: PredictionInput):
 
     except HTTPException: raise
     except Exception as e:
+        db.rollback() # Annule en cas d'erreur DB
         print(f" [SERVER ERROR] : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur interne de prédiction.{e}")
+    
+    
+    
+    
+# def maintenance_cycle(db: Session):
+#     # 1. Mise à jour des indices mondiaux
+#     update_market_indices_via_finance()
+    
+#     # 2. Collecte de la réalité (Simulateur)
+#     simulate_market_reality(db)
+    
+#     # 3. Synchronisation (Le Match)
+#     sync_real_prices(db)
+    
+#     # 4. Vérification de la performance
+#     perf = calculate_model_accuracy(db)
+#     print(f"Précision actuelle : {perf}%")
+    
+#     # # 5. Condition de réentraînement
+#     if perf < 85.0: # Si on descend sous 85% de précision
+#         print(" Lancement du réentraînement du modèle...")
+#         retrain_model_with_new_logs(db)
+        
+        
+# def calculate_model_accuracy(db: Session):
+#     """
+#     Calcule la précision (Accuracy) basée sur les logs synchronisés.
+#     """
+#     # On récupère uniquement les prédictions qui ont été confrontées à la réalité
+#     logs = db.query(PredictionLog).filter(PredictionLog.prix_reel != None).all()
+    
+#     if not logs:
+#         print("📊 Pas assez de données pour calculer la précision.")
+#         return 100.0 # On suppose que tout va bien si on n'a pas encore de preuves
+
+#     total_mape = 0
+#     for log in logs:
+#         # Formule de l'erreur relative : |Prédit - Réel| / Réel
+#         error = abs(log.prix_predit - log.prix_reel) / log.prix_reel
+#         total_mape += error
+
+#     # Moyenne des erreurs
+#     mean_error = total_mape / len(logs)
+#     accuracy = (1 - mean_error) * 100
+    
+#     print(f"📊 Précision actuelle du modèle : {round(accuracy, 2)}%")
+#     return round(accuracy, 2)
+
+
+
+# import pandas as pd
+# import joblib
+# from sklearn.ensemble import RandomForestRegressor
+
+# def retrain_model_with_new_logs(db: Session):
+#     """
+#     Réentraîne le modèle en utilisant les logs de la DB comme nouveau dataset.
+#     """
+#     # 1. Extraction des données
+#     query = db.query(PredictionLog).filter(PredictionLog.prix_reel != None)
+#     df = pd.read_sql(query.statement, db.bind)
+
+#     if len(df) < 10: # Seuil minimum pour ne pas entraîner sur du vide
+#         print("⚠️ Trop peu de données pour un réentraînement sérieux.")
+#         return
+
+#     # 2. Préparation des Features (X) et de la Cible (y)
+#     # On extrait les données du dictionnaire JSON 'input_features'
+#     X = pd.DataFrame([
+#         {
+#             "produit": log.produit, # Attention : devra être encodé
+#             "mois": log.date_voulue.month,
+#             "carburant": log.input_features.get('carburant'),
+#             "disponibilite": log.input_features.get('disponibilite', 1.0),
+#             "indice_politique": log.input_features.get('indice_politique'),
+#             "indice_economique": log.input_features.get('indice_economique')
+#         } for log in db.query(PredictionLog).filter(PredictionLog.prix_reel != None).all()
+#     ])
+    
+#     y = df['prix_reel']
+
+#     # 3. Encodage (On utilise l'encodeur chargé au démarrage)
+#     # Note: Dans un vrai flux, on ré-encode proprement les noms de produits
+#     X['produit'] = brain["encoder"].transform(X['produit'])
+
+#     # 4. Entraînement
+#     print("🧠 Réentraînement du Random Forest en cours...")
+#     new_model = RandomForestRegressor(n_estimators=100)
+#     new_model.fit(X, y)
+
+#     # 5. Sauvegarde (On écrase l'ancien ou on crée une v2)
+#     model_path = os.path.join(BRAIN_DIR, "model.pkl")
+#     joblib.dump(new_model, model_path)
+    
+#     # On met à jour le dictionnaire global pour que l'API utilise le nouveau cerveau tout de suite
+#     brain["model"] = new_model
+#     print("✅ Modèle mis à jour avec succès !")

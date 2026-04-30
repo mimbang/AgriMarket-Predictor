@@ -1,0 +1,22 @@
+{
+  "market_indices": [
+    {
+      "mois": 4,
+      "annee": 2026,
+      "prix_carburant": 840.0,
+      "indice_politique": 0.5,
+      "indice_economique": 0.7
+    },
+    {
+      "mois": 5,
+      "annee": 2026,
+      "prix_carburant": 850.0,
+      "indice_politique": 0.5,
+      "indice_economique": 0.6
+    }
+  ],
+  "products": [
+    {"nom": "Tomate", "categorie": "Légume", "unite": "Kg"},
+    {"nom": "Oignon", "categorie": "Légume", "unite": "Sac"}
+  ]
+}

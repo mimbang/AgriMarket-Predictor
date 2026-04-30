@@ -26,3 +26,32 @@ def get_db():
         yield db
     finally:
         db.close()
+        
+        
+        
+import json
+import os
+from sqlalchemy.orm import Session
+from .models import MarketIndex, Product
+
+def seed_database(db: Session):
+    if not os.path.exists("seed_data.json"):
+        print(" Aucun fichier seed_data.json trouvé.")
+        return
+
+    with open("seed_data.json", "r") as f:
+        data = json.load(f)
+
+    # Remplir Market Indices
+    if db.query(MarketIndex).count() == 0:
+        for item in data["market_indices"]:
+            db.add(MarketIndex(**item))
+        print(" Market indices chargés.")
+
+    # Remplir Products
+    if db.query(Product).count() == 0:
+        for item in data["products"]:
+            db.add(Product(**item))
+        print(" Produits chargés.")
+
+    db.commit()
