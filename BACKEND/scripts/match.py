@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from app.models import PredictionLog
-from app.models import PredictionLog, ScrapedPrice
+from BACKEND.app.models import PredictionLog
+from BACKEND.app.models import PredictionLog, ScrapedPrice
 
 def sync_real_prices(db: Session):
     # 1. On cherche les logs qui n'ont pas encore de prix réel

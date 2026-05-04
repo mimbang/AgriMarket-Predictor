@@ -1,7 +1,7 @@
 import random
 from datetime import date
 from sqlalchemy.orm import Session
-from app.models import PredictionLog, ScrapedPrice
+from BACKEND.app.models import PredictionLog, ScrapedPrice
 
 def simulate_market_reality(db: Session):
     """

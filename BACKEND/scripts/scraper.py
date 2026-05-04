@@ -1,7 +1,7 @@
 import yfinance as yf
 from datetime import datetime
-from app.database import SessionLocal
-from app.models import MarketIndex
+from BACKEND.app.database import SessionLocal
+from BACKEND.app.models import MarketIndex
 
 def update_market_indices_via_finance():
     """

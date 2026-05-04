@@ -1,9 +1,9 @@
 # worker.py
-from app.database import SessionLocal
-from scripts.scraper import update_market_indices_via_finance
-from scripts.reality_simulator import simulate_market_reality
-from scripts.run_tasks import calculate_model_accuracy, retrain_model
-from scripts.match import sync_real_prices
+from BACKEND.app.database import SessionLocal
+from BACKEND.scripts.scraper import update_market_indices_via_finance
+from BACKEND.scripts.reality_simulator import simulate_market_reality
+from BACKEND.scripts.run_tasks import calculate_model_accuracy, retrain_model
+from BACKEND.scripts.match import sync_real_prices
 
 def run_daily_pipeline():
     db = SessionLocal()

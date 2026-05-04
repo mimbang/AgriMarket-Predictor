@@ -3,7 +3,7 @@ import joblib
 import os
 from sklearn.ensemble import RandomForestRegressor
 from sqlalchemy.orm import Session
-from app.models import PredictionLog
+from BACKEND.app.models import PredictionLog
 
 BRAIN_DIR = "brain"
 
