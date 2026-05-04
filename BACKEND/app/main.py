@@ -106,7 +106,7 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
     # Plus besoin de vérifier "if model is None", lifespan s'en est chargé !
     
     try:
-        target_date = payload.da or date.today()
+        target_date = payload.date or date.today()
         # 1. Encodage sécurisé du produit
         try:
             prod_name = payload.produit.capitalize()
