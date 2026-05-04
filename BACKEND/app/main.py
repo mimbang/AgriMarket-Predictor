@@ -15,7 +15,8 @@ from app.database import SessionLocal
 from scripts.scraper import update_market_indices_via_finance
 from scripts.reality_simulator import simulate_market_reality
 from scripts.match import sync_real_prices
-
+# ON FORCE ICI : Avant même de créer l'app ou d'importer les routes
+Base.metadata.create_all(bind=engine)
 # app = FastAPI(title="AgriMarket API")
 load_dotenv()
 
@@ -54,6 +55,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f" [DB] Erreur : Impossible de joindre la base de données.")
         print(f"👉 Détail : {e}")
+        raise HTTPException(status_code=500, detail="Erreur de connexion à la base de données. Veuillez vérifier la configuration.")
     
     # Vérification de présence
     try:
@@ -88,6 +90,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="My Predictor MArket",
+    docs_url="/my-private-docs",  # Nouvelle route pour Swagger UI
+    redoc_url="/my-redoc",        # Nouvelle route pour ReDoc
     lifespan=lifespan  # Indispensable pour charger le cerveau au démarrage !
 )
 
