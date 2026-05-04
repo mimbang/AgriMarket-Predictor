@@ -13,6 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: 🔍 Debug Directory Structure
+        run: |
+          echo "📍 Répertoire actuel : $(pwd)"
+          echo "📂 Contenu du répertoire :"
+          ls -R
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
