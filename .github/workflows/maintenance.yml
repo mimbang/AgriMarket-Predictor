@@ -33,7 +33,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           # On lance le script qui contient tes fonctions de retraining
-          python -m BACKEND.app.scripts.worker 
+          python -m BACKEND.scripts.worker 
 
       - name: Commit and Push if model changed
         run: |
