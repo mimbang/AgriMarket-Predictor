@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 from .database import SessionLocal, engine, Base, get_db, seed_database
 from dateutil.relativedelta import relativedelta
 from .models import PredictionInput, PredictionLog , MarketIndex 
-from datetime import date
+from datetime import date, datetime, datetime
 from contextlib import asynccontextmanager
 import pandas as pd
 from app.database import SessionLocal
@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="My Predictor MArket",
-    docs_url="/my-private-docs",  # Nouvelle route pour Swagger UI
+    docs_url="/me-noah",  # Nouvelle route pour Swagger UI
     redoc_url="/my-redoc",        # Nouvelle route pour ReDoc
     lifespan=lifespan  # Indispensable pour charger le cerveau au démarrage !
 )
@@ -102,8 +102,41 @@ def read_root():
 
 @app.get("/db-test")
 def test_db(db: Session = Depends(get_db)):
-    # Si cette route répond, c'est que la boucle API -> DB fonctionne
-    return {"status": "Connexion DB opérationnelle"}
+    """
+    Diagnostic complet de la base de données et de l'état du système.
+    """
+    try:
+        # 1. Test de lecture simple (Latence)
+        start_time = datetime.now()
+        db.execute(text("SELECT 1"))
+        latency = (datetime.now() - start_time).total_seconds() * 1000
+
+        # 2. Vérification du contenu des tables clés
+        count_indices = db.query(MarketIndex).count()
+        count_logs = db.query(PredictionLog).count()
+
+        # 3. Récupération de la dernière prédiction (pour voir si le log fonctionne)
+        last_log = db.query(PredictionLog).order_by(PredictionLog.id.desc()).first()
+
+        return {
+            "status": "online",
+            "database": {
+                "connection": "OK",
+                "latency_ms": round(latency, 2),
+                "tables": {
+                    "market_indices": count_indices,
+                    "prediction_logs": count_logs
+                },
+                "last_activity": last_log.date_voulue if last_log else "Aucune"
+            },
+            "environment": os.getenv("RENDER_EXTERNAL_URL", "local")
+        }
+    except Exception as e:
+        print(f"🔴 Erreur de diagnostic : {e}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Base de données injoignable ou tables manquantes : {str(e)}"
+        )
 
 @app.post("/predict")
 async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
@@ -144,24 +177,25 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
         DEFAULT_FUEL = 840.0
         DEFAULT_INDEX = 0.5
 
-        input_data = {
-                "carburant": indices.prix_carburant if indices else DEFAULT_FUEL,
-                "disponibilite": 1, 
-                "indice_politique": indices.indice_politique if indices else DEFAULT_INDEX,
-                "indice_economique": indices.indice_economique if indices else DEFAULT_INDEX
-                        }
+        # 1. On prépare les données avec les noms EXACTS attendus par le modèle
+        input_data_for_model = {
+            "carburant": indices.prix_carburant if indices else DEFAULT_FUEL,
+            "dispo": 1.0,  # Nom attendu: 'dispo' au lieu de 'disponibilite'
+            "pol": indices.indice_politique if indices else DEFAULT_INDEX, # 'pol' au lieu de 'indice_politique'
+            "econ": indices.indice_economique if indices else DEFAULT_INDEX # 'econ' au lieu de 'indice_economique'
+            }
 
-    # 4. Conversion pour le modèle IA
+        # 2. Encodage du produit
         prod_encoded = brain["encoder"].transform([payload.produit])[0]
-    
-    # Création du DataFrame avec les noms exacts des colonnes pour le modèle
-        X = pd.DataFrame([{
-        "produit": prod_encoded,
-        "mois": target_date.month,
-        **input_data
-    }])
 
-    # 5. Inférence
+        # 3. Création du DataFrame avec les colonnes dans le BON ORDRE et les BONS NOMS
+        X = pd.DataFrame([{
+          "produit_encoded": prod_encoded, # 'produit_encoded' au lieu de 'produit'
+            "mois": target_date.month,
+            **input_data_for_model
+            }])
+
+        # 4. Inférence (Maintenant les noms correspondent !)
         X_scaled = brain["scaler"].transform(X)
         prediction = brain["model"].predict(X_scaled)[0]
 
@@ -170,7 +204,7 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
         produit=payload.produit,
         date_voulue=target_date,
         prix_predit=prediction,
-        input_features=input_data  # On garde une trace du prix du carburant utilisé !
+        input_features=input_data_for_model  # On garde une trace du prix du carburant utilisé !
     )
         db.add(log)
         db.commit()
