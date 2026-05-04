@@ -32,7 +32,7 @@ from typing import Optional
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, validator
 from typing import Optional
 
 class PredictionInput(BaseModel):
@@ -52,7 +52,8 @@ class PredictionInput(BaseModel):
     # Optionnel : une ville si tu veux affiner plus tard
     ville: Optional[str] = Field("Yaoundé", description="Ville de référence")
 
-    @validator('produit')
+    @field_validator('produit')
+    @classmethod
     def validate_produit(cls, v):
         # On normalise pour correspondre aux noms dans ton modèle IA
         v = v.capitalize()
@@ -61,7 +62,8 @@ class PredictionInput(BaseModel):
             raise ValueError(f"Produit non géré. Liste autorisée : {produits_autorises}")
         return v
     
-    @validator('dateprediction', always=True)
+    @field_validator('date_prediction', mode='before')
+    @classmethod
     def validate_date_prediction(cls, v, values):
         if v is None:
             # Si l'utilisateur n'a pas fourni de date, on calcule à partir de 'predire_dans_x_mois'

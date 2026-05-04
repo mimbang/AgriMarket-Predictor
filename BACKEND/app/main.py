@@ -5,7 +5,7 @@ import joblib , os ,numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
 from .database import SessionLocal, engine, Base, get_db, seed_database
-import time
+from dateutil.relativedelta import relativedelta
 from .models import PredictionInput, PredictionLog , MarketIndex 
 from datetime import date
 from contextlib import asynccontextmanager
@@ -106,7 +106,13 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
     # Plus besoin de vérifier "if model is None", lifespan s'en est chargé !
     
     try:
-        target_date = payload.date or date.today()
+        # Si predire_dans_x_mois est fourni (ex: 3), on l'ajoute à aujourd'hui
+        if payload.predire_dans_x_mois and payload.predire_dans_x_mois > 0:
+            target_date = date.today() + relativedelta(months=payload.predire_dans_x_mois)
+        else:
+            # Sinon on prend la date fournie, ou aujourd'hui par défaut
+            target_date = payload.date_prediction or date.today()
+        
         # 1. Encodage sécurisé du produit
         try:
             prod_name = payload.produit.capitalize()

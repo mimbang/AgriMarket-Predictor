@@ -1,0 +1,39 @@
+name: Model Maintenance (Daily)
+
+on:
+  schedule:
+    # Se lance tous les jours à minuit
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Permet de cliquer sur un bouton pour tester
+
+jobs:
+  update_model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run maintenance script
+        env:
+          # C'est ici qu'on lie la base de données
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          # On lance le script qui contient tes fonctions de retraining
+          python -m app.scripts.maintenance 
+
+      - name: Commit and Push if model changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add brain/*.pkl
+          git commit -m " Auto-update model: $(date +'%Y-%m-%d')" || echo "No changes"
+          git push
