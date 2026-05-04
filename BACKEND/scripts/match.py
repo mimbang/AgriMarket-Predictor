@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from BACKEND.app.models import PredictionLog
+from app.models import PredictionLog
 from app.models import PredictionLog, ScrapedPrice
 
 def sync_real_prices(db: Session):
