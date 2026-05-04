@@ -20,7 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install -r backend/requirements.txt
 
       - name: Run maintenance script
         env:
@@ -28,7 +28,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           # On lance le script qui contient tes fonctions de retraining
-          python -m app.scripts.maintenance 
+          python -m app.scripts.worker 
 
       - name: Commit and Push if model changed
         run: |
