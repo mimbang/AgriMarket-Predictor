@@ -20,4 +20,4 @@ COPY . .
 
 # CORRECTION : guvicorn n'existe pas (c'est gunicorn ou uvicorn)
 # Et on sépare les arguments dans une liste pour que Docker les gère bien
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "10000"]
