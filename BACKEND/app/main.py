@@ -258,8 +258,8 @@ def GetFedback(id: int, feedback: str,price:float, db: Session = Depends(get_db)
 
     #   Logique pour traiter le feedback :
     #   1. Récupérer la prédiction correspondante dans la DB
-      Log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
-      if Log:
+    Log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
+    if Log:
           Log.prix_reel = price  # On met à jour le prix réel fourni par l'utilisateur
           if feedback.lower() == "correct":
               Log.is_valid = True
@@ -267,6 +267,8 @@ def GetFedback(id: int, feedback: str,price:float, db: Session = Depends(get_db)
               Log.is_valid = False
           db.commit()
           return {"status": "success", "message": "Feedback enregistré."}
+    else:
+          raise HTTPException(status_code=404, detail="Prédiction non trouvée.")
     
     
     
