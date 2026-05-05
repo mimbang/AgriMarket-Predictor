@@ -213,7 +213,9 @@ async def predict(payload: PredictionInput ,request : Request, db: Session = Dep
         db.refresh(log)
         # .url_for utilise le nom de ta fonction (submit_feedback)
         feedback_url = request.url_for("submit_feedback", id=log.id)
-        
+        # On génère la base de l'URL
+        base_url = str(request.base_url).rstrip('/')
+        link = f"{base_url}/prediction/{log.id}/feedback"
         
 
         print(f" [PREDICT] {prod_name}: {round(prediction, 2)} FCFA")
@@ -230,7 +232,8 @@ async def predict(payload: PredictionInput ,request : Request, db: Session = Dep
             "prediction": round(float(prediction), 2),
             "action": {
                 "type": "feedback",
-                "url": feedback_url
+                "method": "POST",
+                "url": link,
             },
             "debug_info": {
             "archive_id": log.id,
