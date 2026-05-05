@@ -215,6 +215,13 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
 
         return {
             "status": "success",
+            "Produit": payload.produit,
+            "index_month": target_date.month,
+            "Prediction logs": {
+                "prix_carburant": input_data_for_model["carburant"],
+                "indice_politique": input_data_for_model["pol"],
+                "indice_economique": input_data_for_model["econ"]
+            },
             "prediction": round(float(prediction), 2),
             "meta": {
                 "confiance": f"{round(brain['precision'] * 100, 2)}%",

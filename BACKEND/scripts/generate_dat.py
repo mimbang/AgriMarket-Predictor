@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 def generate_data():
-    print("🚜 Génération du dataset Agri-Cameroun...")
+    print(" Génération du dataset Agri-Cameroun...")
     np.random.seed(42)
     n_per_product = 2500
     
