@@ -1,6 +1,8 @@
+from typing import Optional
+
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Depends ,Query
 import joblib , os ,numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
@@ -137,9 +139,9 @@ def test_db(db: Session = Depends(get_db)):
             status_code=500, 
             detail=f"Base de données injoignable ou tables manquantes : {str(e)}"
         )
-
+    
 @app.post("/predict")
-async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
+async def predict(payload: PredictionInput ,request : Request, db: Session = Depends(get_db)):
     # Plus besoin de vérifier "if model is None", lifespan s'en est chargé !
     
     try:
@@ -209,6 +211,8 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
         db.add(log)
         db.commit()
         db.refresh(log)
+        # .url_for utilise le nom de ta fonction (submit_feedback)
+        feedback_url = request.url_for("submit_feedback", id=log.id)
         
         
 
@@ -224,11 +228,15 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
             },
             "index_month": target_date.month,
             "prediction": round(float(prediction), 2),
+            "action": {
+                "type": "feedback",
+                "url": feedback_url
+            },
+            "debug_info": {
             "archive_id": log.id,
-    "debug_info": {
-        "produit": log.produit,
-        "prix_predit": log.prix_predit
-    },
+            "produit": log.produit,
+            "prix_predit": log.prix_predit
+                },
             "meta": {
                 "confiance": f"{round(brain['precision'] * 100, 2)}%",
                 "date": target_date
@@ -274,23 +282,58 @@ def seed(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Erreur lors de l'initialisation de la base de données.")
     
     
-@app.post("prediction/id/feedback")
-def GetFedback(id: int, feedback: str,price:float, db: Session = Depends(get_db)):
-    """Endpoint pour recevoir le feedback de l'utilisateur sur une prédiction spécifique."""
+@app.post(f"/prediction/{id}/feedback")
+def submit_feedback(
+    id: int, 
+    feedback: str = Query(..., description="Doit être 'correct' ou 'incorrect'"), 
+    price: float = Query(..., description="Le prix réel constaté sur le marché"), 
+    comment : Optional[str] = Query(None, description="Commentaire optionnel de l'utilisateur"),
+    db: Session = Depends(get_db)
+):
+    """Endpoint pour enregistrer le feedback utilisateur et améliorer le futur retraining."""
+    
+    try:
+        # 1. Recherche de la prédiction
+        log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
+        
+        if not log:
+            raise HTTPException(status_code=404, detail=f"La prédiction avec l'ID {id} n'existe pas.")
 
-    #   Logique pour traiter le feedback :
-    #   1. Récupérer la prédiction correspondante dans la DB
-    Log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
-    if Log:
-          Log.prix_reel = price  # On met à jour le prix réel fourni par l'utilisateur
-          if feedback.lower() == "correct":
-              Log.is_valid = True
-          elif feedback.lower() == "incorrect":
-              Log.is_valid = False
-          db.commit()
-          return {"status": "success", "message": "Feedback enregistré."}
-    else:
-          raise HTTPException(status_code=404, detail="Prédiction non trouvée.")
+        # 2. Mise à jour des données
+        log.prix_reel = price
+        
+        # On normalise le feedback pour éviter les erreurs de casse
+        feedback_clean = feedback.strip().lower()
+        if feedback_clean == "correct":
+            log.is_valid = True
+        elif feedback_clean == "incorrect":
+            log.is_valid = False
+        else:
+            # Optionnel : lever une erreur si le feedback n'est ni 'correct' ni 'incorrect'
+            raise HTTPException(status_code=400, detail="Le feedback doit être 'correct' ou 'incorrect'.")
+
+        # 3. Sauvegarde
+        db.commit()
+        db.refresh(log) # Pour être sûr d'avoir l'objet à jour
+
+        return {
+            "status": "success", 
+            "message": "Feedback enregistré avec succès",
+            "data": {
+                "id": log.id,
+                "prix_predit": log.prix_predit,
+                "prix_reel": log.prix_reel,
+                "is_valid": log.is_valid
+            }
+        }
+
+    except HTTPException as http_exc:
+        # On laisse passer les erreurs 404 et 400 qu'on a levées
+        raise http_exc
+    except Exception as e:
+        # On gère les erreurs imprévues (ex: problème de DB)
+        db.rollback() # Annule la transaction en cas d'échec
+        raise HTTPException(status_code=500, detail=f"Erreur interne : {str(e)}")
     
     
     
