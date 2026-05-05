@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi import FastAPI, Depends ,Query
 import joblib , os ,numpy as np
 from sqlalchemy.orm import Session
+import uuid
 from sqlalchemy import create_engine, text
 from .database import SessionLocal, engine, Base, get_db, seed_database
 from dateutil.relativedelta import relativedelta
@@ -287,7 +288,7 @@ def seed(db: Session = Depends(get_db)):
     
 @app.post(f"/prediction/{id}/feedback")
 def submit_feedback(
-    id: int, 
+    id: uuid.UUID, 
     feedback: str = Query(..., description="Doit être 'correct' ou 'incorrect'"), 
     price: float = Query(..., description="Le prix réel constaté sur le marché"), 
     comment : Optional[str] = Query(None, description="Commentaire optionnel de l'utilisateur"),
