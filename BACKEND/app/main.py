@@ -216,13 +216,14 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
         return {
             "status": "success",
             "Produit": payload.produit,
-            "index_month": target_date.month,
             "Prediction logs": {
                 "prix_carburant": input_data_for_model["carburant"],
                 "indice_politique": input_data_for_model["pol"],
                 "indice_economique": input_data_for_model["econ"]
             },
+            "index_month": target_date.month,
             "prediction": round(float(prediction), 2),
+            "logs result" : log.to_dict(),
             "meta": {
                 "confiance": f"{round(brain['precision'] * 100, 2)}%",
                 "date": target_date
@@ -235,6 +236,37 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
         print(f" [SERVER ERROR] : {e}")
         raise HTTPException(status_code=500, detail=f"Erreur interne de prédiction.{e}")
     
+@app.get("/logs")
+def get_logs(db: Session = Depends(get_db)):
+    logs = db.query(PredictionLog).order_by(PredictionLog.id.desc()).limit(100).all()
+    return {"logs": [log.to_dict() for log in logs]}
+
+
+@app.post("/seed")
+def seed(db: Session = Depends(get_db)):
+    try:
+        seed_database(db)
+        return {"status": "success", "message": "Base de données initialisée avec succès."}
+    except Exception as e:
+        print(f"Erreur lors du seeding : {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'initialisation de la base de données.")
+    
+    
+@app.post("prediction/id/feedback")
+def GetFedback(id: int, feedback: str,price:float, db: Session = Depends(get_db)):
+    """Endpoint pour recevoir le feedback de l'utilisateur sur une prédiction spécifique."""
+
+    #   Logique pour traiter le feedback :
+    #   1. Récupérer la prédiction correspondante dans la DB
+      Log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
+      if Log:
+          Log.prix_reel = price  # On met à jour le prix réel fourni par l'utilisateur
+          if feedback.lower() == "correct":
+              Log.is_valid = True
+          elif feedback.lower() == "incorrect":
+              Log.is_valid = False
+          db.commit()
+          return {"status": "success", "message": "Feedback enregistré."}
     
     
     
