@@ -286,9 +286,9 @@ def seed(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Erreur lors de l'initialisation de la base de données.")
     
     
-@app.post(f"/prediction/{id}/feedback")
+@app.post("/prediction/{log_id}/feedback")
 def submit_feedback(
-    id: uuid.UUID, 
+    log_id: uuid.UUID, 
     feedback: str = Query(..., description="Doit être 'correct' ou 'incorrect'"), 
     price: float = Query(..., description="Le prix réel constaté sur le marché"), 
     comment : Optional[str] = Query(None, description="Commentaire optionnel de l'utilisateur"),
@@ -298,7 +298,7 @@ def submit_feedback(
     
     try:
         # 1. Recherche de la prédiction
-        log = db.query(PredictionLog).filter(PredictionLog.id == id).first()
+        log = db.query(PredictionLog).filter(PredictionLog.id == log_id).first()
         
         if not log:
             raise HTTPException(status_code=404, detail=f"La prédiction avec l'ID {id} n'existe pas.")
