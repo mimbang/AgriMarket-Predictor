@@ -208,6 +208,7 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
     )
         db.add(log)
         db.commit()
+        db.refresh(log)
         
         
 
@@ -223,7 +224,11 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
             },
             "index_month": target_date.month,
             "prediction": round(float(prediction), 2),
-            "logs result" : log.to_dict(),
+            "archive_id": log.id,
+    "debug_info": {
+        "produit": log.produit,
+        "prix_predit": log.prix_predit
+    },
             "meta": {
                 "confiance": f"{round(brain['precision'] * 100, 2)}%",
                 "date": target_date
@@ -238,9 +243,26 @@ async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
     
 @app.get("/logs")
 def get_logs(db: Session = Depends(get_db)):
-    logs = db.query(PredictionLog).order_by(PredictionLog.id.desc()).limit(100).all()
-    return {"logs": [log.to_dict() for log in logs]}
-
+    try:
+        logs = db.query(PredictionLog).order_by(PredictionLog.id.desc()).limit(100).all()
+        
+        # On extrait les colonnes dynamiquement
+        result = []
+        for log in logs:
+            # On transforme l'objet SQL en dict Python
+            d = {c.name: getattr(log, c.name) for c in log.__table__.columns}
+            
+            # Correction pour les types non-sérialisables en JSON (comme les dates)
+            for key, value in d.items():
+                if hasattr(value, 'isoformat'): # Si c'est une date ou datetime
+                    d[key] = value.isoformat()
+            
+            result.append(d)
+            
+        return {"logs": result}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
 @app.post("/seed")
 def seed(db: Session = Depends(get_db)):
