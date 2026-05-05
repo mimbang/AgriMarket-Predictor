@@ -1,7 +1,7 @@
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi import FastAPI, Depends ,Query
 import joblib , os ,numpy as np
 from sqlalchemy.orm import Session
@@ -141,7 +141,7 @@ def test_db(db: Session = Depends(get_db)):
         )
     
 @app.post("/predict")
-async def predict(payload: PredictionInput , db: Session = Depends(get_db)):
+async def predict(payload: PredictionInput ,request : Request, db: Session = Depends(get_db)):
     # Plus besoin de vérifier "if model is None", lifespan s'en est chargé !
     
     try:
