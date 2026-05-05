@@ -32,6 +32,7 @@ jobs:
           # C'est ici qu'on lie la base de données
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/BACKEND
           # On lance le script qui contient tes fonctions de retraining
           python -m BACKEND.scripts.worker 
 
