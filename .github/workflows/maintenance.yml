@@ -35,10 +35,22 @@ jobs:
           # On lance le script qui contient tes fonctions de retraining
           python -m BACKEND.scripts.worker 
 
-      - name: Commit and Push if model changed
+      - name: Commit and Push changes
         run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add brain/*.pkl
-          git commit -m " Auto-update model: $(date +'%Y-%m-%d')" || echo "No changes"
-          git push
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions Bot"
+
+          # On récupère la date actuelle au format YYYY-MM-DD
+          DATA_DATE=$(date +'%Y-%m-%d')
+          
+          # On cherche les fichiers .pkl peu importe où ils sont dans BACKEND
+          # Le "|| true" évite que le script s'arrête si aucun fichier n'est trouvé
+          git add BACKEND/brain/*.pkl || true
+          
+          # On vérifie s'il y a vraiment des changements avant de commit
+          if git diff --cached --quiet; then
+            echo "Pas de changements détectés dans les modèles .pkl"
+          else
+            git commit -m " [AUTO] Mise à jour du modèle IA - $DATA_DATE"
+            git push
+          fi
